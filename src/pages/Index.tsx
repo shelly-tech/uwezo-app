@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
-import { Heart, BarChart3, MessageCircle, Sparkles } from "lucide-react";
+import { Heart, BarChart3, MessageCircle, Sparkles, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import MoodSelector from "@/components/MoodSelector";
 import StressSlider from "@/components/StressSlider";
 
@@ -12,10 +13,25 @@ const Index = () => {
   const [mood, setMood] = useState<number | undefined>();
   const [stress, setStress] = useState(5);
   const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const handleSubmit = () => {
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setUserId(session.user.id);
+      }
+    });
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/auth");
+  };
+
+  const handleSubmit = async () => {
     if (!mood) {
       toast({
         title: "Please select your mood",
@@ -25,15 +41,44 @@ const Index = () => {
       return;
     }
 
-    toast({
-      title: "Check-in saved! 🌟",
-      description: "Your wellness data has been recorded",
-    });
+    if (!userId) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to save your check-in",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    // Reset form
-    setMood(undefined);
-    setStress(5);
-    setNotes("");
+    setLoading(true);
+    try {
+      const { error } = await supabase.from("mood_logs").insert({
+        user_id: userId,
+        mood_score: mood,
+        stress_level: stress,
+        notes: notes || null,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Check-in saved! 🌟",
+        description: "Your wellness data has been recorded",
+      });
+
+      // Reset form
+      setMood(undefined);
+      setStress(5);
+      setNotes("");
+    } catch (error: any) {
+      toast({
+        title: "Error saving check-in",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -47,14 +92,24 @@ const Index = () => {
             </div>
             <h1 className="text-2xl font-bold text-foreground">UWEZO APP</h1>
           </div>
-          <Button 
-            variant="outline" 
-            onClick={() => navigate("/dashboard")}
-            className="gap-2 hover:bg-primary/10"
-          >
-            <BarChart3 className="h-4 w-4" />
-            Dashboard
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => navigate("/dashboard")}
+              className="gap-2 hover:bg-primary/10"
+            >
+              <BarChart3 className="h-4 w-4" />
+              Dashboard
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={handleLogout}
+              className="hover:bg-destructive/10 hover:text-destructive"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -98,8 +153,9 @@ const Index = () => {
               onClick={handleSubmit} 
               className="w-full h-12 text-lg font-semibold shadow-lg hover:shadow-xl transition-all hover:scale-[1.02]"
               size="lg"
+              disabled={loading}
             >
-              Save Check-in
+              {loading ? "Saving..." : "Save Check-in"}
             </Button>
           </div>
         </Card>
@@ -116,7 +172,11 @@ const Index = () => {
                 Connect with certified counselors via live chat
               </p>
             </div>
-            <Button variant="secondary" className="bg-accent hover:bg-accent/90 text-accent-foreground font-semibold">
+            <Button 
+              variant="secondary" 
+              className="bg-accent hover:bg-accent/90 text-accent-foreground font-semibold"
+              onClick={() => navigate("/help")}
+            >
               Get Help
             </Button>
           </div>
