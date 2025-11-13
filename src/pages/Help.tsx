@@ -93,15 +93,11 @@ const Help = () => {
       if (error) throw error;
 
       setNewMessage("");
-
-      // Simulate counselor response (in production, this would come from a real counselor or AI)
-      setTimeout(async () => {
-        await supabase.from("counselor_chats").insert({
-          user_id: userId,
-          message: "Thank you for reaching out. A certified counselor will be with you shortly. In the meantime, remember that you're not alone, and it's brave to ask for help. 💙",
-          sender_type: "counselor",
-        });
-      }, 2000);
+      
+      toast({
+        title: "Message sent",
+        description: "Your message has been sent to our counselors.",
+      });
     } catch (error: any) {
       toast({
         title: "Error",
